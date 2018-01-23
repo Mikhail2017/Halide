@@ -63,6 +63,9 @@ void define_func(py::module &m) {
         .def(py::init<std::string>())
         .def(py::init<Expr>())
 
+        // for implicitly_convertible
+        .def(py::init([](const ImageParam &im) -> Func { return im; }))
+
         .def("realize", [](Func &f, Buffer<> buffer, const Target &target, const ParamMap &param_map) -> void {
             f.realize(Realization(buffer), target);
         }, py::arg("dst"), py::arg("target") = Target(), py::arg("param_map") = ParamMap())
@@ -230,6 +233,8 @@ void define_func(py::module &m) {
             return o.str();
         })
     ;
+
+    py::implicitly_convertible<ImageParam, Func>();
 
     // Note that overloads of FuncRef must come *before* Expr;
     // otherwise PyBind's automatic STL conversion machinery

@@ -351,7 +351,7 @@ class GeneratorBase;
 class GeneratorParamBase {
 public:
     EXPORT explicit GeneratorParamBase(const std::string &name);
-    EXPORT virtual ~GeneratorParamBase();
+    EXPORT virtual ~GeneratorParamBase() { ObjectInstanceRegistry::unregister_instance(this); }
 
     const std::string name;
 
@@ -511,7 +511,7 @@ private:
     template <typename T2, typename std::enable_if<std::is_same<T, T2>::value &&
                                                    std::is_same<T, LoopLevel>::value>::type * = nullptr>
     HALIDE_ALWAYS_INLINE void typed_setter_impl(const LoopLevel &value, const char *msg) {
-        value_.set(value);
+        value_ = value;
     }
 };
 
@@ -690,9 +690,9 @@ public:
 
     void set_from_string(const std::string &new_value_string) override {
         bool v = false;
-        if (new_value_string == "true") {
+        if (new_value_string == "true" || new_value_string == "True") {
             v = true;
-        } else if (new_value_string == "false") {
+        } else if (new_value_string == "false" || new_value_string == "False") {
             v = false;
         } else {
             user_assert(false) << "Unable to parse bool: " << new_value_string;
@@ -2725,6 +2725,7 @@ private:
     EXPORT Func get_first_output();
     EXPORT Func get_output(const std::string &n);
     EXPORT std::vector<Func> get_output_vector(const std::string &n);
+    EXPORT std::map<std::string, std::vector<Func>> get_output_map();
 
     EXPORT void set_inputs_vector(const std::vector<std::vector<StubInput>> &inputs);
 
@@ -3091,8 +3092,14 @@ public:
 class GeneratorStub : public NamesInterface {
 public:
     EXPORT GeneratorStub(const GeneratorContext &context,
+                         GeneratorFactory generator_factory);
+
+    EXPORT GeneratorStub(const GeneratorContext &context,
                          GeneratorFactory generator_factory,
                          const GeneratorParamsMap &generator_params,
+                         const std::vector<std::vector<Internal::StubInput>> &inputs);
+
+    EXPORT void generate(const GeneratorParamsMap &generator_params,
                          const std::vector<std::vector<Internal::StubInput>> &inputs);
 
     // Output(s)
@@ -3108,6 +3115,10 @@ public:
 
     std::vector<Func> get_output_vector(const std::string &n) const {
         return generator->get_output_vector(n);
+    }
+
+    std::map<std::string, std::vector<Func>> get_output_map() const {
+        return generator->get_output_map();
     }
 
     static std::vector<StubInput> to_stub_input_vector(const Expr &e) {
@@ -3129,6 +3140,11 @@ public:
         std::copy(v.begin(), v.end(), std::back_inserter(r));
         return r;
     }
+
+    struct Names {
+        std::vector<std::string> generator_params, inputs, outputs;
+    };
+    EXPORT Names get_names() const;
 
     std::shared_ptr<GeneratorBase> generator;
 };

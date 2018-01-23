@@ -16,6 +16,8 @@
 #include <mutex>
 #include <vector>
 
+#include "Util.h"
+
 namespace Halide {
 namespace Internal {
 
@@ -56,7 +58,7 @@ public:
 
     /** Remove an instance from the registry. Assert if not found.
      */
-    static void unregister_instance(void *this_ptr);
+    EXPORT static void unregister_instance(void *this_ptr);
 
     /** Returns the list of subject pointers for objects that have
      *   been directly registered within the given range. If there is

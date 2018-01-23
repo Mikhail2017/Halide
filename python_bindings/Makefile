@@ -9,18 +9,36 @@ BIN ?= $(ROOT_DIR)/bin
 PYTHON ?= python3
 TEST_TMP ?= $(BIN)/tmp
 
+ifeq ($(OS), Windows_NT)
+    # assume we are building for the MinGW environment
+    FPIC=
+    SHARED_EXT=dll
+else
+    FPIC=-fPIC
+ifeq ($(UNAME), Darwin)
+    SHARED_EXT=dylib
+else
+    SHARED_EXT=so
+endif
+endif
+
+# TODO: this is probably a better choice to avoid redundant halide linkage,
+# but crashes due to apparent RTTI issues.
+# LIBHALIDE ?= $(HALIDE_DISTRIB_PATH)/bin/libHalide.$(SHARED_EXT)
+LIBHALIDE ?= $(HALIDE_DISTRIB_PATH)/lib/libHalide.a
+
 ifndef PYBIND11_PATH
     $(error PYBIND11_PATH is undefined)
 endif
 PYBIND11_PATH ?= /path/to/pybind11
 
-OPTIMIZE ?= -O3
+#OPTIMIZE ?= -O3
 
 # defining DEBUG + undefining NDEBUG gives extra debug info in PyBind11
-# OPTIMIZE ?= -g -DDEBUG=1 -UNDEBUG
+OPTIMIZE ?= -g -DDEBUG=1 -UNDEBUG
 
 # Compiling with -fvisibility=hidden saves ~80k on optimized x64 builds
-CCFLAGS=$(shell $(PYTHON)-config --cflags) -I $(PYBIND11_PATH)/include -I $(HALIDE_DISTRIB_PATH)/include -I $(ROOT_DIR) -std=c++11 -fPIC -fvisibility=hidden $(OPTIMIZE)
+CCFLAGS=$(shell $(PYTHON)-config --cflags) -I $(PYBIND11_PATH)/include -I $(HALIDE_DISTRIB_PATH)/include -I $(ROOT_DIR) -std=c++11 $(FPIC) -fvisibility=hidden $(OPTIMIZE)
 LDFLAGS=$(shell $(PYTHON)-config --ldflags) -lz
 
 ifeq ($(UNAME), Darwin)
@@ -30,15 +48,30 @@ ifeq ($(UNAME), Darwin)
 endif
 
 PY_SRCS=$(shell ls $(ROOT_DIR)/src/*.cpp)
-PY_OBJS=$(PY_SRCS:$(ROOT_DIR)/src/%.cpp=$(BIN)/py_%.o)
+PY_OBJS=$(PY_SRCS:$(ROOT_DIR)/src/%.cpp=$(BIN)/src/%.o)
 
-$(BIN)/halide.so: $(PY_SRCS) $(PY_OBJS) $(HALIDE_DISTRIB_PATH)/lib/libHalide.a
+# Note that Python on OSX won't load .dylib; it requires .so
+$(BIN)/halide.so: $(PY_SRCS) $(PY_OBJS) $(LIBHALIDE)
 	@mkdir -p $(@D)
-	$(CXX) $(PY_OBJS) $(LDFLAGS) $(HALIDE_DISTRIB_PATH)/lib/libHalide.a -shared -o $@
+	$(CXX) $(PY_OBJS) $(LDFLAGS) $(LIBHALIDE) -shared -o $@
 
-$(BIN)/py_%.o: $(ROOT_DIR)/src/%.cpp
+$(BIN)/src/%.o: $(ROOT_DIR)/src/%.cpp
 	@mkdir -p $(@D)
 	$(CXX) $(CCFLAGS) -c $< -o $@
+
+
+$(BIN)/%_generator.o: $(ROOT_DIR)/correctness/%_generator.cpp $(HALIDE_DISTRIB_PATH)/include/Halide.h
+	@mkdir -p $(@D)
+	$(CXX) $(CCFLAGS) -fno-rtti -c $< -o $@
+
+# Produce a PyStub extension for the generator by compiling PyStub.cpp
+# (with HALIDE_PYSTUB_NAME defined to the module name), and linking
+# with the generator's .o file, plus the halide.so.
+$(BIN)/%.so: PyStub.cpp $(BIN)/%_generator.o  $(BIN)/halide.so
+	@mkdir -p $(@D)
+	$(CXX) $(CCFLAGS) -DHALIDE_PYSTUB_NAME=$* $^ $(LDFLAGS) -shared -o $@
+
+test_correctness_pystub: $(BIN)/simplestub.so $(BIN)/complexstub.so 
 
 APPS = $(shell ls $(ROOT_DIR)/apps/*.py)
 CORRECTNESS = $(shell ls $(ROOT_DIR)/correctness/*.py)
