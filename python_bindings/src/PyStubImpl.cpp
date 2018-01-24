@@ -18,11 +18,6 @@ using StubInputBuffer = Internal::StubInputBuffer<void>;
 #define EXPORT __attribute__((visibility("default")))
 #endif
 
-// Experiment: return multivalued output as tuple (rather than dict)
-#ifndef HALIDE_STUB_RETURN_TUPLE
-    #define HALIDE_STUB_RETURN_TUPLE 1
-#endif
-
 namespace {
 
 // Anything that defines __getitem__ looks sequencelike to pybind,
@@ -63,45 +58,59 @@ void append_input(py::object value, std::vector<StubInput> &v) {
 
 EXPORT py::object generate_impl(const Internal::GeneratorFactory &factory,
                                 const GeneratorContext &context,
-                                py::object py_inputs, py::dict py_generator_params) {
+                                py::args args, py::kwargs kwargs) {
     Stub stub(context, factory);
     auto names = stub.get_names();
-
-    std::vector<std::vector<StubInput>> inputs;
-    if (is_real_sequence(py_inputs)) {
-        // If inputs is listlike, unpack by position
-        py::sequence s = py::reinterpret_borrow<py::sequence>(py_inputs);
-        inputs.resize(s.size());
-        for (size_t i = 0; i < s.size(); ++i) {
-            append_input(s[i], inputs[i]);
-        }
-    } else if (py::isinstance<py::dict>(py_inputs)) {
-        // If inputs is dictlike, look up by name and assemble in the correct order
-        py::dict d = py::reinterpret_borrow<py::dict>(py_inputs);
-        inputs.resize(names.inputs.size());
-        for (size_t i = 0; i < names.inputs.size(); ++i) {
-            py::str name = py::str(names.inputs[i]);
-            _halide_user_assert(d.contains(name))
-                << "The input '" << names.inputs[i] << "' must be specified.";
-            append_input(d[name], inputs[i]);
-        }
-        _halide_user_assert(names.inputs.size() == d.size())
-            << "Expected exactly " << names.inputs.size() << " inputs but got " << d.size();
+    std::map<std::string, size_t> input_name_to_pos;
+    for (size_t i = 0; i < names.inputs.size(); ++i) {
+        input_name_to_pos[names.inputs[i]] = i;
     }
 
+    // Inputs can be specified by either positional or named args,
+    // and must all be specified.
+    //
+    // GeneratorParams can only be specified by name, and are always optional.
+    //
+    std::vector<std::vector<StubInput>> inputs;
+    inputs.resize(names.inputs.size());
+
     GeneratorParamsMap generator_params;
-    for (auto o : py_generator_params) {
-        std::string key = o.first.cast<std::string>();
-        if (py::isinstance<LoopLevel>(o.second)) {
-            generator_params[key] = o.second.cast<LoopLevel>();
+
+    // Process the kwargs first.
+    for (auto kw : kwargs) {
+        // If the kwarg is the name of a known input, stick it in the input
+        // vector. If not, stick it in the GeneratorParamsMap (if it's invalid,
+        // an error will be reported further downstream).
+        std::string key = kw.first.cast<std::string>();
+        py::handle value = kw.second;
+        auto it = input_name_to_pos.find(key);
+        if (it != input_name_to_pos.end()) {
+            append_input(py::cast<py::object>(value), inputs[it->second]);
         } else {
-            generator_params[key] = py::str(o.second).cast<std::string>();
+            if (py::isinstance<LoopLevel>(value)) {
+                generator_params[key] = value.cast<LoopLevel>();
+            } else {
+                generator_params[key] = py::str(value).cast<std::string>();
+            }
         }
+    }
+
+    // Now, the positional args.
+    _halide_user_assert(args.size() <= names.inputs.size())
+        << "Expected at most " << names.inputs.size() << " positional args.";
+    for (size_t i = 0; i < args.size(); ++i) {
+        _halide_user_assert(inputs[i].size() == 0)
+            << "Generator Input named '" << names.inputs[i] << "' was specified by both position and keyword.";
+        append_input(args[i], inputs[i]);
+    }
+
+    for (size_t i = 0; i < inputs.size(); ++i) {
+        _halide_user_assert(inputs[i].size() != 0)
+            << "Generator Input named '" << names.inputs[i] << "' was not specified.";
     }
 
     stub.generate(generator_params, inputs);
 
-#if HALIDE_STUB_RETURN_TUPLE
     const auto outputs = stub.get_output_vector();
     py::tuple py_outputs(outputs.size());
     for (size_t i = 0; i < outputs.size(); i++) {
@@ -119,22 +128,6 @@ EXPORT py::object generate_impl(const Internal::GeneratorFactory &factory,
         py_outputs[i] = o;
     }
     return py_outputs;
-#else
-    const auto outputs = stub.get_output_map();
-    py::dict py_outputs;
-    py::object py_single_output;
-    for (const auto &it : outputs) {
-        const auto &name = it.first;
-        const auto &v = it.second;
-        py::object o = (v.size() == 1) ? py::cast(v[0]) : py::cast(v);
-        if (outputs.size() == 1) {
-            // bail early, return the single object rather than a dict
-            return o;
-        }
-        py_outputs[py::str(name)] = o;
-    }
-    return py_outputs;
-#endif
 }
 
 // We must ensure this is marked as 'exported' as Stubs will use it.

@@ -7,9 +7,9 @@ namespace Halide {
 namespace PythonBindings {
 
 py::object generate_impl(const Internal::GeneratorFactory &factory, const GeneratorContext &context,
-                         py::object py_inputs, py::dict py_generator_params);
+                         py::args args, py::kwargs kwargs);
 py::object generate_impl(const Internal::GeneratorFactory &factory, const Target &target,
-                         py::object py_inputs, py::dict py_generator_params);
+                         py::args args, py::kwargs kwargs);
 
 }  // namespace PythonBindings
 }  // namespace Halide

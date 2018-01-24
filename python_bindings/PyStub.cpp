@@ -30,9 +30,9 @@ extern py::object generate_impl(const Internal::GeneratorFactory &factory, const
 }  // namespace Halide
 
 PYBIND11_MODULE(HALIDE_PYSTUB_NAME, m) {
-    m.def("generate", [](const Halide::Target &target, py::object inputs, py::dict generator_params) -> py::object {
+    m.def("generate", [](const Halide::Target &target, py::args args, py::kwargs kwargs) -> py::object {
         const Halide::Internal::GeneratorFactory factory =
             halide_register_generator:: HALIDE_MAKE_NAME(HALIDE_PYSTUB_NAME, _ns) ::factory;
-        return Halide::PythonBindings::generate_impl(factory, target, inputs, generator_params);
-    }, py::arg("target"), py::arg("inputs"), py::arg("generator_params") = py::dict());
+        return Halide::PythonBindings::generate_impl(factory, target, args, kwargs);
+    }, py::arg("target"));
 }
