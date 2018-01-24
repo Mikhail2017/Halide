@@ -2725,7 +2725,8 @@ private:
     EXPORT Func get_first_output();
     EXPORT Func get_output(const std::string &n);
     EXPORT std::vector<Func> get_output_vector(const std::string &n);
-    EXPORT std::map<std::string, std::vector<Func>> get_output_map();
+    EXPORT std::vector<std::vector<Func>> get_output_vector();
+    // EXPORT std::map<std::string, std::vector<Func>> get_output_map();
 
     EXPORT void set_inputs_vector(const std::vector<std::vector<StubInput>> &inputs);
 
@@ -3117,9 +3118,13 @@ public:
         return generator->get_output_vector(n);
     }
 
-    std::map<std::string, std::vector<Func>> get_output_map() const {
-        return generator->get_output_map();
+    std::vector<std::vector<Func>> get_output_vector() const {
+        return generator->get_output_vector();
     }
+
+    // std::map<std::string, std::vector<Func>> get_output_map() const {
+    //     return generator->get_output_map();
+    // }
 
     static std::vector<StubInput> to_stub_input_vector(const Expr &e) {
         return { StubInput(e) };

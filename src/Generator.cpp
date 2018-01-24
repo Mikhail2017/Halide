@@ -1138,20 +1138,36 @@ std::vector<Func> GeneratorBase::get_output_vector(const std::string &n) {
     return {};
 }
 
-std::map<std::string, std::vector<Func>> GeneratorBase::get_output_map() {
-    std::map<std::string, std::vector<Func>> m;
+// std::map<std::string, std::vector<Func>> GeneratorBase::get_output_map() {
+//     std::map<std::string, std::vector<Func>> m;
+//     check_min_phase(GenerateCalled);
+//     // There usually are very few outputs, so a linear search is fine
+//     ParamInfo &pi = param_info();
+//     for (auto output : pi.filter_outputs) {
+//         const std::string &name = output->name();
+//         if (output->is_array()) {
+//             m[name] = get_output_vector(name);
+//         } else {
+//             m[name] = std::vector<Func>{get_output(name)};
+//         }
+//     }
+//     return m;
+// }
+
+std::vector<std::vector<Func>> GeneratorBase::get_output_vector() {
+    std::vector<std::vector<Func>> v;
     check_min_phase(GenerateCalled);
     // There usually are very few outputs, so a linear search is fine
     ParamInfo &pi = param_info();
     for (auto output : pi.filter_outputs) {
         const std::string &name = output->name();
         if (output->is_array()) {
-            m[name] = get_output_vector(name);
+            v.push_back(get_output_vector(name));
         } else {
-            m[name] = std::vector<Func>{get_output(name)};
+            v.push_back(std::vector<Func>{get_output(name)});
         }
     }
-    return m;
+    return v;
 }
 
 Internal::GeneratorParamBase &GeneratorBase::find_generator_param_by_name(const std::string &name) {

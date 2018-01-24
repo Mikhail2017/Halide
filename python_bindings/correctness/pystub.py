@@ -140,31 +140,33 @@ def test_complexstub():
         "untyped_buffer_output_type": "uint8",
         "vectorize": True,
     }
-    outputs = complexstub.generate(t, generator_params = generator_params, inputs = inputs)
 
-    simple_output = outputs["simple_output"].realize(32, 32, 3, t)
-    assert simple_output.type() == hl.Float(32)
+    (simple_output, tuple_output, array_output, 
+    typed_buffer_output, untyped_buffer_output, 
+    static_compiled_buffer_output) = complexstub.generate(t, generator_params = generator_params, inputs = inputs)
+
+    b = simple_output.realize(32, 32, 3, t)
+    assert b.type() == hl.Float(32)
     for x in range(32):
         for y in range(32):
             for c in range(3):
                 expected = constant_image[x, y, c]
-                actual = simple_output[x, y, c]
+                actual = b[x, y, c]
                 assert expected == actual, "Expected %s Actual %s" % (expected, actual)
 
-    tuple_output = outputs["tuple_output"].realize(32, 32, 3, t)
-    assert tuple_output[0].type() == hl.Float(32)
-    assert tuple_output[1].type() == hl.Float(32)
-    assert len(tuple_output) == 2
+    b = tuple_output.realize(32, 32, 3, t)
+    assert b[0].type() == hl.Float(32)
+    assert b[1].type() == hl.Float(32)
+    assert len(b) == 2
     for x in range(32):
         for y in range(32):
             for c in range(3):
                 expected1 = constant_image[x, y, c] * float_arg
                 expected2 = expected1 + int_arg
-                actual1, actual2 = tuple_output[0][x, y, c], tuple_output[1][x, y, c]
+                actual1, actual2 = b[0][x, y, c], b[1][x, y, c]
                 assert expected1 == actual1, "Expected1 %s Actual1 %s" % (expected1, actual1)
                 assert expected2 == actual2, "Expected2 %s Actual1 %s" % (expected2, actual2)
 
-    array_output = outputs["array_output"]
     assert len(array_output) == 2
     for a in array_output:
         b = a.realize(32, 32, t)
@@ -179,31 +181,31 @@ def test_complexstub():
     # is used within another Generator; this isn't yet implemented since there
     # isn't yet Python bindings for Generator authoring. This section
     # of the test may need revision at that point.
-    typed_buffer_output = outputs["typed_buffer_output"].realize(32, 32, 3)
-    assert typed_buffer_output.type() == hl.Float(32)
+    b = typed_buffer_output.realize(32, 32, 3)
+    assert b.type() == hl.Float(32)
     for x in range(32):
         for y in range(32):
             for c in range(3):
                 expected = constant_image[x, y, c]
-                actual = typed_buffer_output[x, y, c]
+                actual = b[x, y, c]
                 assert expected == actual, "Expected %s Actual %s" % (expected, actual)
 
-    untyped_buffer_output = outputs["untyped_buffer_output"].realize(32, 32, 3)
-    assert untyped_buffer_output.type() == hl.UInt(8)
+    b = untyped_buffer_output.realize(32, 32, 3)
+    assert b.type() == hl.UInt(8)
     for x in range(32):
         for y in range(32):
             for c in range(3):
                 expected = constant_image[x, y, c]
-                actual = untyped_buffer_output[x, y, c]
+                actual = b[x, y, c]
                 assert expected == actual, "Expected %s Actual %s" % (expected, actual)
 
-    static_compiled_buffer_output = outputs["static_compiled_buffer_output"].realize(4, 4, 1)
-    assert static_compiled_buffer_output.type() == hl.UInt(8)
+    b = static_compiled_buffer_output.realize(4, 4, 1)
+    assert b.type() == hl.UInt(8)
     for x in range(4):
         for y in range(4):
             for c in range(1):
                 expected = constant_image[x, y, c] + 42
-                actual = static_compiled_buffer_output[x, y, c]
+                actual = b[x, y, c]
                 assert expected == actual, "Expected %s Actual %s" % (expected, actual)
 
 

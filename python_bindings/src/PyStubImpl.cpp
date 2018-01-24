@@ -1,4 +1,4 @@
- #include "PyStubImpl.h"
+#include "PyStubImpl.h"
 
 namespace Halide {
 namespace PythonBindings {
@@ -16,6 +16,11 @@ using StubInputBuffer = Internal::StubInputBuffer<void>;
 #endif
 #else
 #define EXPORT __attribute__((visibility("default")))
+#endif
+
+// Experiment: return multivalued output as tuple (rather than dict)
+#ifndef HALIDE_STUB_RETURN_TUPLE
+    #define HALIDE_STUB_RETURN_TUPLE 1
 #endif
 
 namespace {
@@ -96,10 +101,25 @@ EXPORT py::object generate_impl(const Internal::GeneratorFactory &factory,
 
     stub.generate(generator_params, inputs);
 
-    if (names.outputs.size() == 1) {
-        return py::cast(stub.get_output(names.outputs[0]));
+#if HALIDE_STUB_RETURN_TUPLE
+    const auto outputs = stub.get_output_vector();
+    py::tuple py_outputs(outputs.size());
+    for (size_t i = 0; i < outputs.size(); i++) {
+        py::object o;
+        if (outputs[i].size() == 1) {
+            // convert list-of-1 into single element
+            o = py::cast(outputs[i][0]);
+        } else {
+            o = py::cast(outputs[i]);
+        }
+        if (outputs.size() == 1) {
+            // bail early, return the single object rather than a dict
+            return o;
+        }
+        py_outputs[i] = o;
     }
-
+    return py_outputs;
+#else
     const auto outputs = stub.get_output_map();
     py::dict py_outputs;
     py::object py_single_output;
@@ -114,6 +134,7 @@ EXPORT py::object generate_impl(const Internal::GeneratorFactory &factory,
         py_outputs[py::str(name)] = o;
     }
     return py_outputs;
+#endif
 }
 
 // We must ensure this is marked as 'exported' as Stubs will use it.
