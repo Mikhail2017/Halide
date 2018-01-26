@@ -636,6 +636,8 @@ void StubEmitter::emit() {
     stream << indent() << "#endif  // " << guard.str() << "\n";
 }
 
+GeneratorStub::GeneratorStub() {}
+
 GeneratorStub::GeneratorStub(const GeneratorContext &context,
                              GeneratorFactory generator_factory)
     : generator(generator_factory(context)) {}

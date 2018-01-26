@@ -3092,6 +3092,8 @@ public:
 
 class GeneratorStub : public NamesInterface {
 public:
+    EXPORT GeneratorStub();
+
     EXPORT GeneratorStub(const GeneratorContext &context,
                          GeneratorFactory generator_factory);
 

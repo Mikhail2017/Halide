@@ -66,10 +66,12 @@ $(BIN)/%_generator.o: $(ROOT_DIR)/correctness/%_generator.cpp $(HALIDE_DISTRIB_P
 
 # Produce a PyStub extension for the generator by compiling PyStub.cpp
 # (with HALIDE_PYSTUB_NAME defined to the module name), and linking
-# with the generator's .o file, plus the halide.so.
+# with the generator's .o file, plus any valid libHalide. (Since the halide.so
+# we produce here happens to export all of the libHalide symbols we need,
+# and is likely to be present anyway, we'll just link to it.)
 $(BIN)/%.so: PyStub.cpp $(BIN)/%_generator.o  $(BIN)/halide.so
 	@mkdir -p $(@D)
-	$(CXX) $(CCFLAGS) -DHALIDE_PYSTUB_NAME=$* $^ $(LDFLAGS) -shared -o $@
+	$(CXX) $(CCFLAGS) -DHALIDE_PYSTUB_GENERATOR_NAME=$* $^ $(LDFLAGS) -shared -o $@
 
 test_correctness_pystub: $(BIN)/simplestub.so $(BIN)/complexstub.so 
 

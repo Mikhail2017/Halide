@@ -43,4 +43,9 @@ PYBIND11_MODULE(halide, m) {
     define_param(m);
     define_image_param(m);
     define_type(m);
+
+    // This is here solely to ensure that GeneratorStub
+    // (and related classes) are linked in, so that downstream
+    // users of PyStub can link to us and rely on their presence.
+    Halide::Internal::GeneratorStub unused;
 }
