@@ -364,10 +364,13 @@ void CodeGen_LLVM::initialize_llvm() {
     }
 }
 
-void CodeGen_LLVM::init_context() {
+void CodeGen_LLVM::init_context(bool builder_reinit) {
     // Ensure our IRBuilder is using the current context.
-    delete builder;
-    builder = new IRBuilder<>(*context);
+
+    if (builder_reinit) {
+        delete builder;
+        builder = new IRBuilder<>(*context);
+    }
 
     // Branch weights for very likely branches
     llvm::MDBuilder md_builder(*context);
@@ -662,6 +665,25 @@ void CodeGen_LLVM::end_func(const std::vector<LoweredArgument>& args) {
 
     current_function_args.clear();
 }
+
+llvm::Value* CodeGen_LLVM::compile_into(Expr expr, llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter> *input_builder, const std::unordered_map<std::string, llvm::Value*>& valueMap) {
+    builder = input_builder;
+    init_context(false);
+    function = builder->GetInsertBlock()->getParent();
+    //module = function->getParent();
+
+    for(auto& a: valueMap) {
+        sym_push(a.first, a.second);
+    }
+
+    auto ret = codegen(expr);
+
+    for(auto& a: valueMap) {
+        sym_pop(a.first);
+    }
+    return ret;
+}
+
 
 void CodeGen_LLVM::compile_func(const LoweredFunc &f, const std::string &simple_name,
                                 const std::string &extern_name) {

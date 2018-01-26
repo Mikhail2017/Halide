@@ -34,6 +34,7 @@ class GlobalVariable;
 #include <string>
 #include <vector>
 #include <memory>
+#include <unordered_map>
 
 #include "IRVisitor.h"
 #include "Module.h"
@@ -70,6 +71,32 @@ public:
     /** Initialize internal llvm state for the enabled targets. */
     static void initialize_llvm();
 
+    /** Get the llvm type equivalent to the given halide type in the
+     * current context. */
+    llvm::Type *llvm_type_of(Type);
+
+    /** Compile expression into existing IRbuilder/etc */
+    llvm::Value* compile_into(Expr expr,
+        llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter> *input_builder,
+        const std::unordered_map<std::string, llvm::Value*>& valueMap);
+
+    /** Run all of llvm's optimization passes on the module. */
+    void optimize_module();
+
+    /** Add an entry to the symbol table, hiding previous entries with
+     * the same name. Call this when new values come into scope. */
+    void sym_push(const std::string &name, llvm::Value *value);
+
+    /** Remove an entry for the symbol table, revealing any previous
+     * entries with the same name. Call this when values go out of
+     * scope. */
+    void sym_pop(const std::string &name);
+
+    /** Fetch an entry from the symbol table. If the symbol is not
+     * found, it either errors out (if the second arg is true), or
+     * returns nullptr. */
+    llvm::Value* sym_get(const std::string &name,
+                         bool must_succeed = true) const;
 protected:
     CodeGen_LLVM(Target t);
 
@@ -121,10 +148,15 @@ protected:
     static bool llvm_PowerPC_enabled;
 
     const Module *input_module;
+
+public:
     std::unique_ptr<llvm::Module> module;
     llvm::Function *function;
+protected:
     llvm::LLVMContext *context;
+public:
     llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter> *builder;
+protected:
     llvm::Value *value;
     llvm::MDNode *very_likely_branch;
     std::vector<LoweredArgument> current_function_args;
@@ -133,8 +165,10 @@ protected:
     /** The target we're generating code for */
     Halide::Target target;
 
+public:
     /** Grab all the context specific internal state. */
-    virtual void init_context();
+    virtual void init_context(bool builder_reinit=true);
+protected:
     /** Initialize the CodeGen_LLVM internal state to compile a fresh
      * module. This allows reuse of one CodeGen_LLVM object to compiled
      * multiple related modules (e.g. multiple device kernels). */
@@ -142,24 +176,6 @@ protected:
 
     /** Add external_code entries to llvm module. */
     void add_external_code(const Module &halide_module);
-
-    /** Run all of llvm's optimization passes on the module. */
-    void optimize_module();
-
-    /** Add an entry to the symbol table, hiding previous entries with
-     * the same name. Call this when new values come into scope. */
-    void sym_push(const std::string &name, llvm::Value *value);
-
-    /** Remove an entry for the symbol table, revealing any previous
-     * entries with the same name. Call this when values go out of
-     * scope. */
-    void sym_pop(const std::string &name);
-
-    /** Fetch an entry from the symbol table. If the symbol is not
-     * found, it either errors out (if the second arg is true), or
-     * returns nullptr. */
-    llvm::Value* sym_get(const std::string &name,
-                         bool must_succeed = true) const;
 
     /** Test if an item exists in the symbol table. */
     bool sym_exists(const std::string &name) const;
@@ -211,6 +227,7 @@ protected:
     Expr min_f32, max_f32, min_f64, max_f64;
     // @}
 
+public:
     /** Emit code that evaluates an expression, and return the llvm
      * representation of the result of the expression. */
     llvm::Value *codegen(Expr);
@@ -219,6 +236,7 @@ protected:
     /** Emit code that runs a statement. */
     void codegen(Stmt);
 
+protected:
     /** Codegen a vector Expr by codegenning each lane and combining. */
     void scalarize(Expr);
 
@@ -366,10 +384,6 @@ protected:
     /** If we have to bail out of a pipeline midway, this should
      * inject the appropriate target-specific cleanup code. */
     virtual void prepare_for_early_exit() {}
-
-    /** Get the llvm type equivalent to the given halide type in the
-     * current context. */
-    llvm::Type *llvm_type_of(Type);
 
     /** Perform an alloca at the function entrypoint. Will be cleaned
      * on function exit. */
