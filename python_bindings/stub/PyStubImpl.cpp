@@ -1,18 +1,7 @@
 // Note that this deliberately does *not* include PyHalide.h,
 // or depend on any of the code in src: this is intended to be
 // a minimal, generic wrapper to expose an arbitrary Generator
-// for stub usage in Python. To use it, you must:
-// -- compile this file
-//   -- with HALIDE_PYSTUB_GENERATOR_NAME #defined to be registered
-//      build name of the Generator to be used
-//   -- optionally, with HALIDE_PYSTUB_MODULE_NAME #defined to be the desired
-//      name of the Python module (if omitted, will match HALIDE_PYSTUB_GENERATOR_NAME)
-// -- link to the Generator's .o file and a viable libHalide (either .a or .so)
-//
-// (It's tempting to move generator_impl into a common library for re-use among
-// multiple Generator stubs, but in practice, this saves relatively little
-// compilation time and has no effect on final binary size, unless you want to
-// package it into an .so, thus this is a single file for packaging simplicity.)
+// for stub usage in Python.
 
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -25,23 +14,7 @@
 
 namespace py = pybind11;
 
-#ifndef HALIDE_PYSTUB_GENERATOR_NAME
-    #error "HALIDE_PYSTUB_GENERATOR_NAME must be defined"
-#endif
-
-#ifndef HALIDE_PYSTUB_MODULE_NAME
-    #define HALIDE_PYSTUB_MODULE_NAME HALIDE_PYSTUB_GENERATOR_NAME
-#endif
-
-#define HALIDE_MAKE_NAME(a, b) PYBIND11_CONCAT(a, b)
-
-// Forward-declare the factory function for creating an instance of our Generator
-namespace halide_register_generator {
-namespace HALIDE_MAKE_NAME(HALIDE_PYSTUB_GENERATOR_NAME, _ns) {
-extern std::unique_ptr<Halide::Internal::GeneratorBase> factory(const Halide::GeneratorContext& context);
-}  // namespace
-}  // namespace
-
+using FactoryFunc = std::unique_ptr<Halide::Internal::GeneratorBase> (*)(const Halide::GeneratorContext& context);
 
 namespace Halide {
 namespace PythonBindings {
@@ -87,10 +60,10 @@ void append_input(py::object value, std::vector<StubInput> &v) {
     }
 }
 
-py::object generate_impl(const Internal::GeneratorFactory &factory,
-                                const GeneratorContext &context,
-                                py::args args, py::kwargs kwargs) {
-    Stub stub(context, factory);
+py::object generate_impl(FactoryFunc factory, const GeneratorContext &context, py::args args, py::kwargs kwargs) {
+    Stub stub(context, [factory](const GeneratorContext &context) -> std::unique_ptr<Halide::Internal::GeneratorBase> {
+        return factory(context);
+    });
     auto names = stub.get_names();
     std::map<std::string, size_t> input_name_to_pos;
     for (size_t i = 0; i < names.inputs.size(); ++i) {
@@ -161,19 +134,38 @@ py::object generate_impl(const Internal::GeneratorFactory &factory,
     return py_outputs;
 }
 
-py::object generate_impl(const Internal::GeneratorFactory &factory, const Target &target,
-                                py::object py_inputs, py::dict py_generator_params) {
-    return generate_impl(factory, GeneratorContext(target), py_inputs, py_generator_params);
+void pystub_init(pybind11::module &m, FactoryFunc factory) {
+    m.def("generate", [factory](const Halide::Target &target, py::args args, py::kwargs kwargs) -> py::object {
+        return generate_impl(factory, Halide::GeneratorContext(target), args, kwargs);
+    }, py::arg("target"));
 }
 
 }  // namespace
 }  // namespace PythonBindings
 }  // namespace Halide
 
-PYBIND11_MODULE(HALIDE_PYSTUB_MODULE_NAME, m) {
-    m.def("generate", [](const Halide::Target &target, py::args args, py::kwargs kwargs) -> py::object {
-        const auto factory =
-            halide_register_generator:: HALIDE_MAKE_NAME(HALIDE_PYSTUB_GENERATOR_NAME, _ns) ::factory;
-        return Halide::PythonBindings::generate_impl(factory, target, args, kwargs);
-    }, py::arg("target"));
+extern "C" PyObject *_halide_pystub_impl(const char *module_name, FactoryFunc factory) {
+    int major, minor;
+    if (sscanf(Py_GetVersion(), "%i.%i", &major, &minor) != 2) {
+        PyErr_SetString(PyExc_ImportError, "Can't parse Python version.");
+        return nullptr;
+    } else if (major != PY_MAJOR_VERSION || minor != PY_MINOR_VERSION) {
+        PyErr_Format(PyExc_ImportError,
+                     "Python version mismatch: module was compiled for "
+                     "version %i.%i, while the interpreter is running "
+                     "version %i.%i.", PY_MAJOR_VERSION, PY_MINOR_VERSION,
+                     major, minor);
+        return nullptr;
+    }
+    auto m = pybind11::module(module_name);
+    try {
+        Halide::PythonBindings::pystub_init(m, factory);
+        return m.ptr();
+    } catch (pybind11::error_already_set &e) {
+        PyErr_SetString(PyExc_ImportError, e.what());
+        return nullptr;
+    } catch (const std::exception &e) {
+        PyErr_SetString(PyExc_ImportError, e.what());
+        return nullptr;
+    }
 }

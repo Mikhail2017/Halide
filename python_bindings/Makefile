@@ -64,12 +64,20 @@ $(BIN)/%_generator.o: $(ROOT_DIR)/correctness/%_generator.cpp $(HALIDE_DISTRIB_P
 	@mkdir -p $(@D)
 	$(CXX) $(CCFLAGS) -fno-rtti -c $< -o $@
 
-# Produce a PyStub extension for the generator by compiling PyStub.cpp
-# (with HALIDE_PYSTUB_NAME defined to the module name), and linking
-# with the generator's .o file, plus any valid libHalide. (Since the halide.so
-# we produce here happens to export all of the libHalide symbols we need,
+$(BIN)/PyStubImpl.o: $(ROOT_DIR)/stub/PyStubImpl.cpp
+	@mkdir -p $(@D)
+	$(CXX) $(CCFLAGS) -c $< -o $@
+
+# Produce a Python extension for the generator by compiling PyStub.cpp
+# (with HALIDE_PYSTUB_GENERATOR_NAME defined to the Generator's build name), 
+# and linking with the generator's .o file, PyStubImpl.o, plus any valid libHalide. 
+#
+# You can optionally also define HALIDE_PYSTUB_MODULE_NAME if you want the Python 
+# module name to be something other than the Generator build name.
+#
+# (Since the halide.so we produce here happens to export all of the libHalide symbols we need,
 # and is likely to be present anyway, we'll just link to it.)
-$(BIN)/%.so: PyStub.cpp $(BIN)/%_generator.o  $(BIN)/halide.so
+$(BIN)/%.so: $(ROOT_DIR)/stub/PyStub.cpp $(BIN)/PyStubImpl.o $(BIN)/%_generator.o  $(BIN)/halide.so
 	@mkdir -p $(@D)
 	$(CXX) $(CCFLAGS) -DHALIDE_PYSTUB_GENERATOR_NAME=$* $^ $(LDFLAGS) -shared -o $@
 

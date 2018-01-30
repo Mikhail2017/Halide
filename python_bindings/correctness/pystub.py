@@ -2,8 +2,9 @@ from __future__ import print_function
 from __future__ import division
 
 import halide as hl
-import complexstub
 import simplestub
+# test alternate-but-legal syntax
+from complexstub import generate as complexstub
 
 def _realize_and_check(f, offset = 0):
     b = hl.Buffer(hl.Float(32), [2, 2])
@@ -153,15 +154,15 @@ def test_complexstub():
     float_arg = 1.25
     int_arg = 33
 
-    r = complexstub.generate(target, 
-                             typed_buffer_input=constant_image,
-                             untyped_buffer_input=constant_image,
-                             simple_input=input,
-                             array_input=[ input, input ],
-                             float_arg=float_arg,
-                             int_arg=[ int_arg, int_arg ],
-                             untyped_buffer_output_type="uint8",
-                             vectorize=True)
+    r = complexstub(target, 
+                    typed_buffer_input=constant_image,
+                    untyped_buffer_input=constant_image,
+                    simple_input=input,
+                    array_input=[ input, input ],
+                    float_arg=float_arg,
+                    int_arg=[ int_arg, int_arg ],
+                    untyped_buffer_output_type="uint8",
+                    vectorize=True)
 
     # return value is a tuple; unpack separately to avoid
     # making the callsite above unreadable
